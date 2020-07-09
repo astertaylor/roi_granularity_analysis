@@ -33,6 +33,7 @@ import cv2
 from read_roi import read_roi_zip
 from lmfit import Model
 import rawpy
+from synthesis import synthesis_main
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Perform granularity analysis')
@@ -136,6 +137,13 @@ def crop_image(gray,roi,size):
     roi_lr_y = max(roi['y'])
     print(roi_ul_x,roi_ul_y)
     print(roi_lr_x,roi_lr_y)
+    width = int(roi_lr_x-roi_ul_x)
+    height = int(roi_lr_y-roi_ul_y)
+    
+    centerX = np.round(width/2)
+    centerY = np.round(height/2)
+    
+    center = np.round(size/2)
   
     #prepare points for ROI
     points = np.empty((roi['n'],2))
@@ -151,14 +159,17 @@ def crop_image(gray,roi,size):
     print("Masking...")
     m_img = cv2.bitwise_and(gray,mask)
     
-    m_img = m_img[roi_ul_y:(roi_ul_y+size), roi_ul_x:(roi_ul_x+size)]
-    if np.any(m_img.shape)<size:
-        print("padding")
-        pad = np.zeros((size,size),dtype=np.uint8)
-        for i in range(m_img.shape[0]):
-            for j in range(m_img.shape[1]):
-                pad[i,j]=m_img[i,j]
-        m_img = pad
+    m_img = m_img[roi_ul_y:(roi_ul_y+height), roi_ul_x:(roi_ul_x+width)]
+    print("Padding...")
+    pad = np.zeros((size,size),dtype=np.uint8)
+    for i in range(height):
+        for j in range(width):
+            deltX = int(centerX-j)
+            deltY = int(centerY-i)
+            offsetX = int(center-deltX)
+            offsetY = int(center-deltY)
+            pad[offsetY,offsetX]=m_img[i,j]
+    m_img = pad
     #crop down to ROI rectangle
     
     return(m_img, mask)
@@ -199,6 +210,15 @@ confident that there are no major effects due to these artefacts.
 def control_creator(style,fill,gray,mask,roi,size):
     roi_ul_x = min(roi['x'])
     roi_ul_y = min(roi['y'])
+    roi_lr_x = max(roi['x'])
+    roi_lr_y = max(roi['y'])
+    width = int(roi_lr_x-roi_ul_x)
+    height = int(roi_lr_y-roi_ul_y)
+    
+    centerX = np.round(width/2)
+    centerY = np.round(height/2)
+    
+    center = np.round(size/2)
     pattern = False
     if style == 'mean':
         fill_val = nan_mean(gray,roi)
@@ -211,18 +231,20 @@ def control_creator(style,fill,gray,mask,roi,size):
         print("Masking control...")
         control = cv2.bitwise_and(cont,mask) #masks control image
         control = control[roi_ul_y:(roi_ul_y+size), roi_ul_x:(roi_ul_x+size)] #crops control image
-        if np.any(control.shape)<size:
-            print("padding")
-            pad = np.zeros((size,size),dtype=np.uint8)
-            for i in range(control.shape[0]):
-                for j in range(control.shape[1]):
-                    pad[i,j]=control[i,j]
-            control = pad
+        print("padding")
+        pad = np.zeros((size,size),dtype=np.uint8)
+        for i in range(height):
+            for j in range(width):
+                deltX = int(centerX-j)
+                deltY = int(centerY-i)
+                offsetX = int(center-deltX)
+                offsetY = int(center-deltY)
+                pad[offsetY,offsetX]=control[i,j]
+        control = pad
         control = np.float32(control) 
     if style == 'reflection':
         #as-of-yet unfinished
-        reflect = True
-    
+        reflect = True    
     return(control)
 
 def save_image(image,out_path,folder,name,image_class):
@@ -410,7 +432,17 @@ def reverse_calculate(masked_img,NumBands, BandMasks, fft_mod,size):
         reverse = 20*np.real(np.fft.ifft2(reverse))
         
         return(filtered_images_small_u8,255*reverse/np.max(reverse))
-            
+    
+def find_rectangle(mask,size):
+    center = np.round(size/2)
+    mask = np.where(mask!=0,255,0)
+    for i in np.arange(np.round(size/2),0,-1):
+        rectangle = mask[int(center-i):int(center+i),int(center-i):int(center+i)]
+        if np.max(rectangle)==np.min(rectangle)==255: 
+            print("Dimensions of inner square:", i)
+            return(i)
+        
+    return(None)
   
 def main():
     args = parse_args()
@@ -432,7 +464,10 @@ def main():
         size = find_bounds(rois)
         if size == None: size = gray.shape[0]
         
-        BandMasks = make_bands(constants, args.band_method, size, NumBands)
+        if args.control_style == 'texture':
+            BandMasks = make_bands(constants, args.band_method, min(size,128), NumBands)
+        else: BandMasks = make_bands(constants, args.band_method, size, NumBands)
+
         
         if rois==None:
             fft_none,spectrum_none = perform_fft(gray,None)
@@ -453,12 +488,11 @@ def main():
             
             fft,spectrum = perform_fft(m_img, roi)
             save_image(spectrum,out_path,"Output",ind,'figure')
-                        
-            control = control_creator(control_style, fill_val, gray, mask, roi, size)
-            save_image(control,out_path,"Control_Images", ind+"_control",'image')
-            
             
             if args.control_style != 'texture':
+                control = control_creator(control_style, fill_val, gray, mask, roi, size)
+                save_image(control,out_path,"Control_Images", ind+"_control",'image')
+            
                 fft_cont,spectrum_cont = perform_fft(control,roi)
                 save_image(spectrum_cont,out_path,"Control_Output",ind+"_control",'figure')
                 
@@ -471,16 +505,25 @@ def main():
                     filtered, reverse = reverse_calculate(m_img, NumBands, BandMasks, fft_mod, size)
                     save_image(filtered, out_path, "Filters", ind+"_filtered_images",'image')
                     save_image(reverse, out_path, "Filters", ind+"_reverse_image",'image')
-
-                
-            '''else:
-                texture = inner_rectangle(m_img)
-                synthesized_result = synthesis(texture)
-                fft,synth_spectrum = perform_fft(synthesized_result)
-                save_image(synth_spectrum,out_path,"Adjusted_Output",ind+"_synthesized",'figure')
-
-            '''
             
+                
+            else:
+                center = np.round(size/2)
+                rect = find_rectangle(m_img,size)
+                if rect == None:
+                    print("Cannot find rectangle within polygon")
+                    break
+                texture = m_img[int(center-rect):int(center+rect),int(center-rect):int(center+rect)]
+                save_image(texture,out_path,"Control_Images",ind+"_rect_control",'image')
+                if rect%2==0: kern = int(rect+1)
+                else: kern = int(rect)
+                synthesized_result = synthesis_main(texture,min(size,128),min(11,kern))
+                save_image(synthesized_result,out_path,"Control_Images",ind+"_synth_control",'image')
+                fft,spectrum_mod = perform_fft(synthesized_result,None)
+                print(spectrum_mod)
+                save_image(spectrum_mod,out_path,"Adjusted_Output",ind+"_synthesized",'figure')
+
+
             print("MOVING ON TO BAND ANALYSIS")
             
             band_energies(spectrum_mod, BandMasks, NumBands)
