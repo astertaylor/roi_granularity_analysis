@@ -127,7 +127,7 @@ def shrink_roi(rois,constant):
     print("Shrunk ROI by:", constant)
     return(rois)
     
-def crop_image(gray,roi,size):
+def crop_image(style,gray,roi,size):
     #create mask setup
     mask=np.zeros(gray.shape, dtype=np.uint8)
     
@@ -161,6 +161,7 @@ def crop_image(gray,roi,size):
     
     m_img = m_img[roi_ul_y:(roi_ul_y+height), roi_ul_x:(roi_ul_x+width)]
     print("Padding...")
+            
     pad = np.zeros((size,size),dtype=np.uint8)
     for i in range(height):
         for j in range(width):
@@ -170,9 +171,43 @@ def crop_image(gray,roi,size):
             offsetY = int(center-deltY)
             pad[offsetY,offsetX]=m_img[i,j]
     m_img = pad
-    #crop down to ROI rectangle
+    
+    if style == 'reflect':
+        m_img = reflect_control(m_img,mask,size,height,width,style)
     
     return(m_img, mask)
+
+def reflect_control(m_img,mask,size,height,width,style):
+    center = np.round(size/2)
+    centerX = np.round(width/2)
+    centerY = np.round(height/2)
+    pad = np.zeros((size,size),dtype=np.uint8)
+    
+    for i in range(height):
+        i = int(i+(center-centerY))
+        mat = m_img[i,:]
+        try: 
+            max_val = np.max(np.where(mat!=0))
+            min_val = np.min(np.where(mat!=0))
+        except:
+            continue
+        if max_val == min_val: continue
+        remain_right = int(center-(max_val-centerX))
+        remain_left = int(center-(centerX-min_val))
+        
+        pad[i,:] = np.pad(mat,(remain_left,remain_right),style)
+    
+    max_val = min_val = centerY
+    for i in range(width):
+        mat = m_img[:,int(i+(center-centerY))]
+        if np.max(np.where(mat!=0))>max_val: max_val = np.max(np.where(mat!=0))
+        if np.min(np.where(mat!=0))<min_val: min_val = np.min(np.where(mat!=0))
+    
+    pad = pad[min_val:max_val,:]
+    
+    pad = np.pad(pad,(min_val,int(size-max_val)),style)   
+    
+    return(pad)
     
 def perform_fft(m_img,roi):
         
@@ -242,9 +277,6 @@ def control_creator(style,fill,gray,mask,roi,size):
                 pad[offsetY,offsetX]=control[i,j]
         control = pad
         control = np.float32(control) 
-    if style == 'reflection':
-        #as-of-yet unfinished
-        reflect = True    
     return(control)
 
 def save_image(image,out_path,folder,name,image_class):
