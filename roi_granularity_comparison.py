@@ -66,7 +66,7 @@ def open_file(image_path, roi_path):
     print("ROI path:",roi_path)
     try: rois = read_roi_zip(roi_path)
     except: 
-        print("No ROI, transfomring whole image")
+        print("No ROI, transforming whole image")
         rois = None
         
     #import image as np array
@@ -173,41 +173,99 @@ def crop_image(style,gray,roi,size):
     m_img = pad
     
     if style == 'reflect':
-        m_img = reflect_control(m_img,mask,size,height,width,style)
+        m_img = reflect_control(m_img,mask,size,height,width)
     
     return(m_img, mask)
 
-def reflect_control(m_img,mask,size,height,width,style):
-    center = np.round(size/2)
-    centerX = np.round(width/2)
-    centerY = np.round(height/2)
-    pad = np.zeros((size,size),dtype=np.uint8)
+def reflect_control(m_img,mask,size,height,width):
+    center = (size/2)
+    centerX = (width/2)
+    centerY = (height/2)
+    pad = np.zeros((height,width),dtype=np.uint8)
+    m_img = m_img[int(center-centerY):int(center+centerY),int(center-centerX):int(center+centerX)]
+    print(width,height)
+    print(m_img.shape)
+    
+    
+    print("Reflecting...")
     
     for i in range(height):
-        i = int(i+(center-centerY))
         mat = m_img[i,:]
-        try: 
-            max_val = np.max(np.where(mat!=0))
-            min_val = np.min(np.where(mat!=0))
-        except:
-            continue
-        if max_val == min_val: continue
-        remain_right = int(center-(max_val-centerX))
-        remain_left = int(center-(centerX-min_val))
+        try: relevant = np.where(mat!=0)
+        except: continue
+        relevant = relevant[0]
+        if relevant.size == 0: continue
+        max_val = np.max(relevant)
+        min_val = np.min(relevant)
+        if max_val - min_val <= 1: continue
+    
+        breaks = []
+        for j in range((relevant.shape[0])-1):
+            if (relevant[j+1]-relevant[j])>1:
+                breaks.append(relevant[j])
+                breaks.append(relevant[j+1])
+        if breaks != []:
+            print("Filling gaps")
+            print(breaks)
+            break_mat = np.array([])
+            for ind in range(int(len(breaks)/2)):
+                j = 2*ind
+                if ind == 0:
+                    b1 = min_val
+                else: b1 = breaks[j-1]
+                b2 = breaks[j]
+                b3 = breaks[j+1]
+                try: b4 = breaks[j+2]
+                except IndexError: b4 = max_val
+                avg = int((b3-b2-1)/2)
+                first = mat[b1:b2]
+                first = np.pad(first,(0,avg),'reflect')
+                break_mat = np.concatenate((break_mat,first),axis = 0)
+                
+                second = mat[b3:b4]
+                second_pad = (b3-b2-avg)
+                second = np.pad(second,(second_pad,0),'reflect')
+                second = second[0:second_pad]
+                break_mat = np.concatenate((break_mat,second),axis = 0)
+            remaining = mat[breaks[-1]:max_val+1]
+            break_mat = np.concatenate((break_mat,remaining),axis = 0)
         
-        pad[i,:] = np.pad(mat,(remain_left,remain_right),style)
-    
-    max_val = min_val = centerY
+            mat = np.pad(break_mat,(min_val,int(width-max_val-1)),'reflect')
+        else: mat = np.pad(mat[min_val:max_val+1],(min_val,int(width-max_val-1)),'reflect')
+        
+        pad[i,:] = mat
+   
     for i in range(width):
-        mat = m_img[:,int(i+(center-centerY))]
-        if np.max(np.where(mat!=0))>max_val: max_val = np.max(np.where(mat!=0))
-        if np.min(np.where(mat!=0))<min_val: min_val = np.min(np.where(mat!=0))
+        mat = pad[:,i]
+        try: relevant = np.where(mat!=0)
+        except: continue
+        relevant = relevant[0]
+        if relevant.size == 0: continue
+        max_val = np.max(relevant)
+        min_val = np.min(relevant)
     
-    pad = pad[min_val:max_val,:]
+        mat = np.pad(mat[min_val:max_val+1],(min_val,int(height-max_val-1)),'reflect')
+        
+        pad[:,i] = mat
+        
+    centerY = (pad.shape[0]/2)
+    centerX = (pad.shape[1]/2)
+    print(center)
+    print(pad.shape)
+    remain_horz1 = int(np.floor(center-centerX))
+    print(center-centerX)
+    print(center-centerY)
+    remain_vert1 = int(np.floor(center-centerY))
     
-    pad = np.pad(pad,(min_val,int(size-max_val)),style)   
+    if remain_vert1<(center-centerY): remain_vert2 = remain_vert1+1
+    else: remain_vert2 = remain_vert1
+    if remain_horz1<(center-centerX): remain_horz2 = remain_horz1+1
+    else: remain_horz2 = remain_horz1
+    
+    pad = np.pad(pad,((remain_vert1,remain_vert2),(remain_horz1,remain_horz2)),'reflect')
     
     return(pad)
+    
     
 def perform_fft(m_img,roi):
         
@@ -513,7 +571,7 @@ def main():
         for ind in rois:
             print ("Now working on "+ind)
             roi = rois[ind]
-            m_img,mask = crop_image(gray,roi,size)
+            m_img,mask = crop_image(control_style,gray,roi,size)
             if m_img.shape[0]==0 or m_img.shape[1] == 0:
                 continue
             save_image(m_img,out_path,"Images",ind,'image')
@@ -521,7 +579,7 @@ def main():
             fft,spectrum = perform_fft(m_img, roi)
             save_image(spectrum,out_path,"Output",ind,'figure')
             
-            if args.control_style != 'texture':
+            if control_style != 'texture' and control_style != 'reflect':
                 control = control_creator(control_style, fill_val, gray, mask, roi, size)
                 save_image(control,out_path,"Control_Images", ind+"_control",'image')
             
@@ -533,13 +591,9 @@ def main():
                 
                 print("Saved modified "+ind)
                 
-                if save:
-                    filtered, reverse = reverse_calculate(m_img, NumBands, BandMasks, fft_mod, size)
-                    save_image(filtered, out_path, "Filters", ind+"_filtered_images",'image')
-                    save_image(reverse, out_path, "Filters", ind+"_reverse_image",'image')
             
                 
-            else:
+            elif control_style == 'texture':
                 center = np.round(size/2)
                 rect = find_rectangle(m_img,size)
                 if rect == None:
@@ -554,6 +608,15 @@ def main():
                 fft,spectrum_mod = perform_fft(synthesized_result,None)
                 print(spectrum_mod)
                 save_image(spectrum_mod,out_path,"Adjusted_Output",ind+"_synthesized",'figure')
+            
+            else:
+                fft_mod = fft
+                spectrum_mod = spectrum
+                
+            if save:
+                filtered, reverse = reverse_calculate(m_img, NumBands, BandMasks, fft_mod, size)
+                save_image(filtered, out_path, "Filters", ind+"_filtered_images",'image')
+                save_image(reverse, out_path, "Filters", ind+"_reverse_image",'image')
 
 
             print("MOVING ON TO BAND ANALYSIS")
