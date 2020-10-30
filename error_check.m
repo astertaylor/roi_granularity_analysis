@@ -6,16 +6,19 @@ function error_vars = error_check(check_sizes, roi_size, NumBands)
         energy_store = [];
         for roi_ind = 1:2
             if roi_ind == 1
-                roi_size
                 processed_check = checkerboard(1:roi_size, 1:roi_size);
             elseif roi_ind == 2
-                roi_size;
-                square;
+                parity = mod(ceil(roi_size/square),2);
                 smallest_integer = ceil(roi_size/(2*square));
                 first_value = smallest_integer*square-roi_size/2;
                 if first_value ==0
                     first_value = first_value+square;
                 end
+               
+                if ~parity
+                    first_value = first_value + square/2;
+                end
+                    
                 last_value = first_value+roi_size;
                 processed_check = checkerboard(first_value:last_value,first_value:last_value);
             end
