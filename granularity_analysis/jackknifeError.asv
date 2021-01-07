@@ -6,32 +6,34 @@ function [error,k_bins,p] = jackknifeError(data,nbins,njack)
     delY = round(isize(1)/ndivs); 
     
     sample_set = [];
-    round_down = (ndivs*delX<=isize(2)) %calculate which way to pad sub-image
+    ndivs*delX
+    round_down = (ndivs*delX<=isize) %calculate which way to pad sub-image
     if ~round_down
-        dif_value = (ndivs*delX)-isize(2)
+        dif_value = (ndivs*delX)-isize
         data = padarray(data,[0,dif_value],128,'post');
         isize = size(data);
-        delX = isize(2)/ndivs; %resetting size of sub-image based on rounding.
+        delX = isize/ndivs; %resetting size of sub-image based on rounding.
     end
     
-    round_down = (ndivs*delY<=isize(1)) %calculate which way to pad sub-image
+    round_down = (ndivs*delY<=isize) %calculate which way to pad sub-image
     if ~round_down
-        dif_value = (ndivs*delY)-isize(1)
+        dif_value = (ndivs*delY)-isize
         data = padarray(data,[dif_value,0],128,'post');
         isize = size(data);
-        delY = isize(1)/ndivs; %resetting size of sub-image based on rounding.
+        delX = isize/ndivs; %resetting size of sub-image based on rounding.
     end
     
     for x_ind = 1:ndivs
         for y_ind = 1:ndivs
-            square = data(((y_ind-1)*delY+1):(y_ind*delY),((x_ind-1)*delX+1):(x_ind*delX));
+            square = data(((x_ind-1)*delX+1):(x_ind*delX),((y_ind-1)*delX+1):(y_ind*delX));
             sample_set = cat(3,sample_set,square); %create set of squares
         end
     end
     
     power_spectra = [];
     isize = size(sample_set);
-    k = getWavenumbers(isize(1),isize(2));
+    isize = isize(1);
+    k = getWavenumbers(isize);
     for index = 1:njack
         [fft,~] = performFFT(sample_set(:,:,index));
         [spectrum,k_bins,~] = binData(fft,k,nbins);

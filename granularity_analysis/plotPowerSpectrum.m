@@ -1,11 +1,13 @@
 function plotPowerSpectrum(energy_store,error_bars,labels,wave_numbers,dim)
-    figure(1);
+    fig1 = figure(1);
+    fig1.WindowState = 'maximized';
     hold on;
-    colors = colorcet('R4','N',dim);
+    colors = colorcet('R4','N',dim); %set colors
     "Error Bars"
     error_bars
     x_vals = wave_numbers;
 
+    %plots each ROI
     for i = 1:dim
         energy = energy_store(:,i);
         if i==1 
@@ -15,6 +17,8 @@ function plotPowerSpectrum(energy_store,error_bars,labels,wave_numbers,dim)
         end
         
     end
+    
+    %show files
     ylabel("Binned Power Spectrum");
     xlabel("Wavenumber");
     set(gca,'xscale','log');

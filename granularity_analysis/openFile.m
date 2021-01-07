@@ -1,6 +1,5 @@
 function gray=openFile(image_path) 
-    readraw;
-    image = imread(image_path);
-    gray = rgb2gray(image);
-    gray = image;
+    dc = readraw;
+    image = imread(dc,image_path); %open image
+    gray = rgb2gray(image); %set to grayscale
 end

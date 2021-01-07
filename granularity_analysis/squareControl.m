@@ -1,5 +1,5 @@
 function output = squareControl(m_img,roi)
-    cutout = getInnerRectangle(roi);
+    cutout = getInnerRectangle(roi); %grab smallest square
     [y,x] = ind2sub(size(roi),find(roi==1));
     roi_ul_x = min(x);
     roi_ul_y = min(y);
@@ -19,4 +19,6 @@ function output = squareControl(m_img,roi)
     cutsize = round(roi_lr_x-roi_ul_x);
    
     output = m_img(roi_ul_y:double(roi_ul_y+cutsize), roi_ul_x:double(roi_ul_x+cutsize));
+    
+    %cuts down to ROI
 end

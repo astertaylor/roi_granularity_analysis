@@ -2,15 +2,23 @@ function [energy_store,error_bars,wave_numbers] = getROIEnergy(gray,roi,nbins,nj
 
     m_img = cropImage(gray,roi,angle);  %crop image
     
-    [y,x] = ind2sub(size(m_img),find(m_img==1)); %grab boundary points
+    [y,x] = ind2sub(size(m_img),find(rois(:,:,1)==1)); %grab boundary points
     
-    isize = size(m_img);
-    width = isize(2);
-    height = isize(1); %find boundaries of ROI
+    roi_ul_x = min(x);
+    roi_ul_y = min(y);
+    roi_lr_x = max(x);
+    roi_lr_y = max(y);
+    width = round(roi_lr_x-roi_ul_x);
+    height = round(roi_lr_y-roi_ul_y); %find boundaries of ROI
+    if height>width 
+        m_img = imrotate(m_img,90);
+        stor
+    end
+    k_x = getWavenumbers(width); %grab wavenumbers
+    k_y = getWavenumbers(height);
 
-    k = getWavenumbers(height,width); %grab wavenumbers
-
     isize = size(m_img);
+    isize = isize(1); %get ROI dimensions
 
     saveImage(m_img,out_path,"Images",labels(ind),'image'); %save image
 
@@ -19,6 +27,7 @@ function [energy_store,error_bars,wave_numbers] = getROIEnergy(gray,roi,nbins,nj
 
     saveImage(abs(log(spectrum)),out_path,"Output",labels(ind),'figure');
     isize = size(spectrum);
+    isize = isize(1); %reset size, just in case
 
     [band_energy,wave_numbers,P_error,~] = binData(fft_orig,k,nbins); %bin the data, get Poisson error
 
