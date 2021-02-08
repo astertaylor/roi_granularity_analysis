@@ -1,0 +1,31 @@
+function makeHeatmap(mat,labels,name,folder,stitle)
+    mat = mat + mat';
+    figure('Position',[200 200 500 400]);
+    dim = length(labels);
+    map = zeros(256,3);
+    maximum = max(3,max(mat(:)));
+    limit = round(256/maximum);
+    R = linspace(1,1,limit);
+    G = linspace(0.7,1,limit);
+    B = linspace(0.2,0.1,limit);
+    map(1:limit,:) = [R',G',B'];
+    R = linspace(0.2,0.3,(256-limit));
+    G = linspace(0.2,0.8,(256-limit));
+    B = linspace(0.7,0.5,(256-limit));
+    map((limit+1):end,:) = [R',G',B'];
+    colormap(map);
+    imagesc(mat);
+    line(repmat([1.5:1:(dim+0.5)],2,1),repmat([0;(2+dim)],1,dim),'Color','k');
+    line(repmat([0;(2+dim)],1,dim),repmat([1.5:1:(dim+0.5)],2,1),'Color','k');
+    colorbar;
+    caxis([0,maximum]);
+    tickgrid = 1:(limit);
+    xticks(tickgrid);
+    yticks(tickgrid);
+    xticklabels(labels);
+    yticklabels(labels);
+    xtickangle(45);
+    ytickangle(45);
+    title(stitle);
+    exportgraphics(gcf,fullfile(folder,name),'Resolution',300);
+end
